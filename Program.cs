@@ -40,110 +40,102 @@ class Program
 
 	// Preparar tareas para cada algoritmo (cada una trabajará sobre una copia independiente)
 	var results = new ConcurrentBag<AlgorithmResult>();
+	var completedCount = 0;
+	var totalAlgorithms = 6;
+	var lockObj = new object();
 
 	// Preparar un arreglo pre-ordenado para la búsqueda binaria sin tiempo de sort
 	var sortedArray = (int[])baseArray.Clone();
 	Array.Sort(sortedArray);
 
-	var tasks = new List<Task>
-	{
-		Task.Run(() => RunSort("BubbleSort", (arr)=>{ BubbleSort(arr); }, baseArray, results)),
-		Task.Run(() => RunSort("QuickSort", (arr)=>{ QuickSort(arr,0,arr.Length-1); }, baseArray, results)),
-		Task.Run(() => RunSort("InsertionSort", (arr)=>{ InsertionSort(arr); }, baseArray, results)),
-		Task.Run(() => RunSearch("SequentialSearch", (arr, val)=> SequentialSearch(arr, val), baseArray, valueToFind, results)),
-		Task.Run(() => RunSearchWithPreSort("BinarySearch (con tiempo de ordenamiento)", (arr, val)=> BinarySearch(arr, val), baseArray, valueToFind, results)),
-		Task.Run(() => RunSearch("BinarySearch (sin tiempo de ordenamiento)", (arr, val)=> BinarySearch(arr, val), sortedArray, valueToFind, results))
-	};
-
-	// Esperar a que todas terminen
-	Task.WaitAll(tasks.ToArray());		// Ordenar resultados por tiempo
-		var ordered = results.OrderBy(r => r.Elapsed).ToList();
-
+	Console.WriteLine("\n Ejecutando algoritmos en paralelo...\n");
 	Console.WriteLine();
+	
+	// Imprimir encabezado de tabla
 	Console.WriteLine("╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
-	Console.WriteLine("║                              RESULTADOS DE LA CARRERA                                              ║");
+	Console.WriteLine("║                              RESULTADOS EN TIEMPO REAL                                             ║");
 	Console.WriteLine("╠═════╦═══════════════════════════════════════════════╦═════════════╦════════════╦═══════════════════╣");
 	Console.WriteLine("║ Pos ║ Algoritmo                                     ║ Tiempo (ms) ║ Memoria    ║ Estado            ║");
 	Console.WriteLine("╠═════╬═══════════════════════════════════════════════╬═════════════╬════════════╬═══════════════════╣");
-	
-	int position = 1;
-	foreach (var r in ordered)
-	{
-		string posStr = position.ToString().PadLeft(3);
-		string nameStr = r.Name.PadRight(45);
-		string timeStr = r.Elapsed.TotalMilliseconds.ToString("F2").PadLeft(9);
-		string memStr = FormatBytes(r.MemoryUsed).PadLeft(8);
-		string msgStr = GetShortMessage(r.Message).PadRight(17);
-		
-		Console.WriteLine($"║ {posStr} ║ {nameStr} ║ {timeStr}   ║ {memStr}  ║ {msgStr} ║");
-		position++;
-	}
-	
-	Console.WriteLine("╚═════╩═══════════════════════════════════════════════╩═════════════╩════════════╩═══════════════════╝");		var winner = ordered.First();
-		Console.WriteLine();
-		Console.WriteLine($"🏆 GANADOR: {winner.Name}");
-		Console.WriteLine($"   Tiempo: {winner.Elapsed.TotalMilliseconds:F2} ms | Memoria: {FormatBytes(winner.MemoryUsed)}");
 
+	var tasks = new List<Task>
+	{
+		Task.Run(() => { var result = RunSort("BubbleSort", (arr)=>{ BubbleSort(arr); }, baseArray); results.Add(result); UpdateProgressAndTable(ref completedCount, totalAlgorithms, lockObj, result, results); }),
+		Task.Run(() => { var result = RunSort("QuickSort", (arr)=>{ QuickSort(arr,0,arr.Length-1); }, baseArray); results.Add(result); UpdateProgressAndTable(ref completedCount, totalAlgorithms, lockObj, result, results); }),
+		Task.Run(() => { var result = RunSort("InsertionSort", (arr)=>{ InsertionSort(arr); }, baseArray); results.Add(result); UpdateProgressAndTable(ref completedCount, totalAlgorithms, lockObj, result, results); }),
+		Task.Run(() => { var result = RunSearch("SequentialSearch", (arr, val)=> SequentialSearch(arr, val), baseArray, valueToFind); results.Add(result); UpdateProgressAndTable(ref completedCount, totalAlgorithms, lockObj, result, results); }),
+		Task.Run(() => { var result = RunSearchWithPreSort("BinarySearch (con tiempo de ordenamiento)", (arr, val)=> BinarySearch(arr, val), baseArray, valueToFind); results.Add(result); UpdateProgressAndTable(ref completedCount, totalAlgorithms, lockObj, result, results); }),
+		Task.Run(() => { var result = RunSearch("BinarySearch (sin tiempo de ordenamiento)", (arr, val)=> BinarySearch(arr, val), sortedArray, valueToFind); results.Add(result); UpdateProgressAndTable(ref completedCount, totalAlgorithms, lockObj, result, results); })
+	};
+
+	// Esperar a que todas terminen
+	Task.WaitAll(tasks.ToArray());
+	
+	var ordered = results.OrderBy(r => r.Elapsed).ToList();
+	Console.WriteLine("╚═════╩═══════════════════════════════════════════════╩═════════════╩════════════╩═══════════════════╝");
+
+	var winner = ordered.First();
 		Console.WriteLine();
-		Console.WriteLine("Presiona Enter para salir...");
-		Console.ReadLine();
+		Console.WriteLine($"GANADOR: {winner.Name}");
+		Console.WriteLine($"   Tiempo: {winner.Elapsed.TotalMilliseconds:F2} ms | Memoria: {FormatBytes(winner.MemoryUsed)}");
+		Console.WriteLine();
 	}
 
 	// Helpers para ejecutar sort y search con medición
-	static void RunSort(string name, Action<int[]> sortAction, int[] baseArray, ConcurrentBag<AlgorithmResult> results)
+	static AlgorithmResult RunSort(string name, Action<int[]> sortAction, int[] baseArray)
 	{
 		var arr = (int[])baseArray.Clone();
-		GC.Collect();
-		GC.WaitForPendingFinalizers();
-		GC.Collect();
-		long memBefore = GC.GetTotalMemory(false);
+		
+		// Medir memoria antes - solo para este hilo
+		long memBefore = GC.GetTotalAllocatedBytes(true);
 		
 		var sw = Stopwatch.StartNew();
 		sortAction(arr);
 		sw.Stop();
 		
-		long memAfter = GC.GetTotalMemory(false);
-		long memUsed = Math.Max(0, memAfter - memBefore);
+		// Medir memoria después
+		long memAfter = GC.GetTotalAllocatedBytes(true);
+		long memUsed = memAfter - memBefore;
 		
-		results.Add(new AlgorithmResult{name=name, Elapsed=sw.Elapsed, MemoryUsed=memUsed, Message=$"ordenó {arr.Length} elementos"});
+		return new AlgorithmResult{name=name, Elapsed=sw.Elapsed, MemoryUsed=memUsed, Message=$"ordenó {arr.Length} elementos"};
 	}
 
-	static void RunSearch(string name, Func<int[],int,int> searchFunc, int[] baseArray, int value, ConcurrentBag<AlgorithmResult> results)
+	static AlgorithmResult RunSearch(string name, Func<int[],int,int> searchFunc, int[] baseArray, int value)
 	{
 		var arr = (int[])baseArray.Clone();
-		GC.Collect();
-		GC.WaitForPendingFinalizers();
-		GC.Collect();
-		long memBefore = GC.GetTotalMemory(false);
+		
+		// Medir memoria antes
+		long memBefore = GC.GetTotalAllocatedBytes(true);
 		
 		var sw = Stopwatch.StartNew();
 		int idx = searchFunc(arr, value);
 		sw.Stop();
 		
-		long memAfter = GC.GetTotalMemory(false);
-		long memUsed = Math.Max(0, memAfter - memBefore);
+		// Medir memoria después
+		long memAfter = GC.GetTotalAllocatedBytes(true);
+		long memUsed = memAfter - memBefore;
 		
-		results.Add(new AlgorithmResult{name=name, Elapsed=sw.Elapsed, MemoryUsed=memUsed, Message= idx>=0? $"encontró en posición {idx}" : "no encontrado"});
+		return new AlgorithmResult{name=name, Elapsed=sw.Elapsed, MemoryUsed=memUsed, Message= idx>=0? $"encontró en posición {idx}" : "no encontrado"};
 	}
 
 	// Para binary search con presort: medimos INCLUYENDO el tiempo de ordenamiento
-	static void RunSearchWithPreSort(string name, Func<int[],int,int> searchFunc, int[] baseArray, int value, ConcurrentBag<AlgorithmResult> results)
+	static AlgorithmResult RunSearchWithPreSort(string name, Func<int[],int,int> searchFunc, int[] baseArray, int value)
 	{
 		var arr = (int[])baseArray.Clone();
-		GC.Collect();
-		GC.WaitForPendingFinalizers();
-		GC.Collect();
-		long memBefore = GC.GetTotalMemory(false);
+		
+		// Medir memoria antes
+		long memBefore = GC.GetTotalAllocatedBytes(true);
 		
 		var sw = Stopwatch.StartNew();
 		Array.Sort(arr); // tiempo incluido
 		int idx = searchFunc(arr, value);
 		sw.Stop();
 		
-		long memAfter = GC.GetTotalMemory(false);
-		long memUsed = Math.Max(0, memAfter - memBefore);
+		// Medir memoria después
+		long memAfter = GC.GetTotalAllocatedBytes(true);
+		long memUsed = memAfter - memBefore;
 		
-		results.Add(new AlgorithmResult{name=name, Elapsed=sw.Elapsed, MemoryUsed=memUsed, Message= idx>=0? $"encontró en posición {idx}" : "no encontrado"});
+		return new AlgorithmResult{name=name, Elapsed=sw.Elapsed, MemoryUsed=memUsed, Message= idx>=0? $"encontró en posición {idx}" : "no encontrado"};
 	}
 	
 	// Helper para formatear mensajes cortos en la tabla
@@ -161,6 +153,29 @@ class Program
 		if (text.Length > width)
 			return text.Substring(0, width - 3) + "...";
 		return text.PadRight(width);
+	}
+
+	// Actualizar progreso y tabla en tiempo real
+	static void UpdateProgressAndTable(ref int completedCount, int total, object lockObj, AlgorithmResult result, ConcurrentBag<AlgorithmResult> allResults)
+	{
+		lock (lockObj)
+		{
+			completedCount++;
+			int percentage = (completedCount * 100) / total;
+			
+			// Ordenar resultados actuales por tiempo
+			var ordered = allResults.OrderBy(r => r.Elapsed).ToList();
+			
+			// Imprimir nueva fila
+			int position = ordered.IndexOf(result) + 1;
+			string posStr = position.ToString().PadLeft(3);
+			string nameStr = result.Name.PadRight(45);
+			string timeStr = result.Elapsed.TotalMilliseconds.ToString("F2").PadLeft(9);
+			string memStr = FormatBytes(result.MemoryUsed).PadLeft(8);
+			string msgStr = GetShortMessage(result.Message).PadRight(17);
+			
+			Console.WriteLine($"║ {posStr} ║ {nameStr} ║ {timeStr}   ║ {memStr}  ║ {msgStr} ║");
+		}
 	}
 
 	// Estructura de resultado
