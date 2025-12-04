@@ -1,0 +1,14 @@
+c:\proyectos\algoritmos_paralelos\carrera\bin\Debug\net10.0\carrera.exe
+c:\proyectos\algoritmos_paralelos\carrera\bin\Debug\net10.0\carrera.deps.json
+c:\proyectos\algoritmos_paralelos\carrera\bin\Debug\net10.0\carrera.runtimeconfig.json
+c:\proyectos\algoritmos_paralelos\carrera\bin\Debug\net10.0\carrera.dll
+c:\proyectos\algoritmos_paralelos\carrera\bin\Debug\net10.0\carrera.pdb
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\carrera.GeneratedMSBuildEditorConfig.editorconfig
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\carrera.AssemblyInfoInputs.cache
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\carrera.AssemblyInfo.cs
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\carrera.csproj.CoreCompileInputs.cache
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\carrera.dll
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\refint\carrera.dll
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\carrera.pdb
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\carrera.genruntimeconfig.cache
+c:\proyectos\algoritmos_paralelos\carrera\obj\Debug\net10.0\ref\carrera.dll
